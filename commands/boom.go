@@ -69,8 +69,6 @@ type Boom struct {
 	Qps int
 	// Option to allow insecure TLS/SSL certificates.
 	AllowInsecure bool
-	// Turn off output printing
-	Quiet bool
 
 	// Output type
 	Output string

@@ -26,7 +26,7 @@ import (
 
 func (b *Boom) Run() *Report {
 	b.results = make(chan *result, b.N)
-	if b.Output == "" && !b.Quiet {
+	if b.Output == "" {
 		b.bar = newPb(b.N)
 	}
 	b.rpt = newReport(b.N, b.results, b.Output)
