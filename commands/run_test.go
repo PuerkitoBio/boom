@@ -159,8 +159,8 @@ func TestContentLengthIfExists(t *testing.T) {
 	}
 	boom.Run()
 
-	if boom.rpt.sizeTotal != 200 {
-		t.Errorf("Expected Total Data Recieved 200 bytes, found %v", boom.rpt.sizeTotal)
+	if boom.rpt.SizeTotal != 200 {
+		t.Errorf("Expected Total Data Recieved 200 bytes, found %v", boom.rpt.SizeTotal)
 	}
 }
 
@@ -180,7 +180,7 @@ func TestContentLengthIfDontExists(t *testing.T) {
 	}
 	boom.Run()
 
-	if boom.rpt.sizeTotal != 0 {
-		t.Errorf("Expected Total Data Recieved 200 bytes, found %v", boom.rpt.sizeTotal)
+	if boom.rpt.SizeTotal != 0 {
+		t.Errorf("Expected Total Data Recieved 200 bytes, found %v", boom.rpt.SizeTotal)
 	}
 }

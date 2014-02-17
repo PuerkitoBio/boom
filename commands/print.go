@@ -25,103 +25,111 @@ const (
 	barChar = "∎"
 )
 
-type report struct {
-	avgTotal float64
-	fastest  float64
-	slowest  float64
-	average  float64
-	rps      float64
+type Report struct {
+	AvgTotal   float64
+	Fastest    float64
+	Slowest    float64
+	Average    float64
+	RPS        float64
+	SuccessRPS float64
 
 	results chan *result
-	total   time.Duration
+	Total   time.Duration
 
-	statusCodeDist map[int]int
-	lats           []float64
-	errors         map[string]int
-	sizeTotal      int64
+	StatusCodeDist map[int]int
+	Lats           []float64
+	Errors         map[string]int
+	SizeTotal      int64
 
 	output string
 }
 
-func newReport(size int, results chan *result, output string) *report {
-	return &report{
-		statusCodeDist: make(map[int]int),
+func newReport(size int, results chan *result, output string) *Report {
+	return &Report{
+		StatusCodeDist: make(map[int]int),
 		results:        results,
 		output:         output,
-		errors:         make(map[string]int),
+		Errors:         make(map[string]int),
 	}
 }
 
-func (r *report) finalize(total time.Duration) {
+func (r *Report) finalize(total time.Duration) {
+	successCnt := 0
 	for {
 		select {
 		case res := <-r.results:
 			if res.err != nil {
-				r.errors[res.err.Error()]++
+				r.Errors[res.err.Error()]++
 			} else {
-				r.lats = append(r.lats, res.duration.Seconds())
-				r.avgTotal += res.duration.Seconds()
-				r.statusCodeDist[res.statusCode]++
+				r.Lats = append(r.Lats, res.duration.Seconds())
+				r.AvgTotal += res.duration.Seconds()
+				r.StatusCodeDist[res.statusCode]++
 				if res.contentLength > 0 {
-					r.sizeTotal += res.contentLength
+					r.SizeTotal += res.contentLength
+				}
+				if res.statusCode >= 200 && res.statusCode < 300 {
+					successCnt++
 				}
 			}
 		default:
-			r.total = total
-			r.rps = float64(len(r.lats)) / r.total.Seconds()
-			r.average = r.avgTotal / float64(len(r.lats))
+			r.Total = total
+			r.RPS = float64(len(r.Lats)) / r.Total.Seconds()
+			r.SuccessRPS = float64(successCnt) / r.Total.Seconds()
+			r.Average = r.AvgTotal / float64(len(r.Lats))
 			r.print()
 			return
 		}
 	}
 }
 
-func (r *report) print() {
-	sort.Float64s(r.lats)
+func (r *Report) print() {
+	sort.Float64s(r.Lats)
 
 	if r.output == "csv" {
 		r.printCSV()
 		return
 	}
 
-	if len(r.lats) > 0 {
-		r.fastest = r.lats[0]
-		r.slowest = r.lats[len(r.lats)-1]
-		fmt.Printf("\nSummary:\n")
-		fmt.Printf("  Total:\t%4.4f secs.\n", r.total.Seconds())
-		fmt.Printf("  Slowest:\t%4.4f secs.\n", r.slowest)
-		fmt.Printf("  Fastest:\t%4.4f secs.\n", r.fastest)
-		fmt.Printf("  Average:\t%4.4f secs.\n", r.average)
-		fmt.Printf("  Requests/sec:\t%4.4f\n", r.rps)
-		if r.sizeTotal > 0 {
-			fmt.Printf("  Total Data Recieved:\t%d bytes.\n", r.sizeTotal)
-			fmt.Printf("  Response Size per Request:\t%d bytes.\n", r.sizeTotal/int64(len(r.lats)))
+	if len(r.Lats) > 0 {
+		r.Fastest = r.Lats[0]
+		r.Slowest = r.Lats[len(r.Lats)-1]
+		if r.output != "quiet" {
+			fmt.Printf("\nSummary:\n")
+			fmt.Printf("  Total:\t%4.4f secs.\n", r.Total.Seconds())
+			fmt.Printf("  Slowest:\t%4.4f secs.\n", r.Slowest)
+			fmt.Printf("  Fastest:\t%4.4f secs.\n", r.Fastest)
+			fmt.Printf("  Average:\t%4.4f secs.\n", r.Average)
+			fmt.Printf("  Requests/sec:\t%4.4f\n", r.RPS)
+			if r.SizeTotal > 0 {
+				fmt.Printf("  Total Data Recieved:\t%d bytes.\n", r.SizeTotal)
+				fmt.Printf("  Response Size per Request:\t%d bytes.\n", r.SizeTotal/int64(len(r.Lats)))
+			}
+			r.printStatusCodes()
+			r.printHistogram()
+			r.printLatencies()
 		}
-		r.printStatusCodes()
-		r.printHistogram()
-		r.printLatencies()
 	}
 
-	if len(r.errors) > 0 {
+	if len(r.Errors) > 0 {
 		r.printErrors()
 	}
 }
 
-func (r *report) printCSV() {
-	for i, val := range r.lats {
+func (r *Report) printCSV() {
+	for i, val := range r.Lats {
 		fmt.Printf("%v,%4.4f\n", i+1, val)
 	}
 }
 
 // Prints percentile latencies.
-func (r *report) printLatencies() {
+func (r *Report) printLatencies() {
 	pctls := []int{10, 25, 50, 75, 90, 95, 99}
 	data := make([]float64, len(pctls))
 	j := 0
-	for i := 0; i < len(r.lats) && j < len(pctls); i++ {
-		current := i * 100 / len(r.lats)
+	for i := 0; i < len(r.Lats) && j < len(pctls); i++ {
+		current := i * 100 / len(r.Lats)
 		if current >= pctls[j] {
-			data[j] = r.lats[i]
+			data[j] = r.Lats[i]
 			j++
 		}
 	}
@@ -133,19 +141,19 @@ func (r *report) printLatencies() {
 	}
 }
 
-func (r *report) printHistogram() {
+func (r *Report) printHistogram() {
 	bc := 10
 	buckets := make([]float64, bc+1)
 	counts := make([]int, bc+1)
-	bs := (r.slowest - r.fastest) / float64(bc)
+	bs := (r.Slowest - r.Fastest) / float64(bc)
 	for i := 0; i < bc; i++ {
-		buckets[i] = r.fastest + bs*float64(i)
+		buckets[i] = r.Fastest + bs*float64(i)
 	}
-	buckets[bc] = r.slowest
+	buckets[bc] = r.Slowest
 	var bi int
 	var max int
-	for i := 0; i < len(r.lats); {
-		if r.lats[i] <= buckets[bi] {
+	for i := 0; i < len(r.Lats); {
+		if r.Lats[i] <= buckets[bi] {
 			i++
 			counts[bi]++
 			if max < counts[bi] {
@@ -167,16 +175,16 @@ func (r *report) printHistogram() {
 }
 
 // Prints status code distribution.
-func (r *report) printStatusCodes() {
+func (r *Report) printStatusCodes() {
 	fmt.Printf("\nStatus code distribution:\n")
-	for code, num := range r.statusCodeDist {
+	for code, num := range r.StatusCodeDist {
 		fmt.Printf("  [%d]\t%d responses\n", code, num)
 	}
 }
 
-func (r *report) printErrors() {
+func (r *Report) printErrors() {
 	fmt.Printf("\nError distribution:\n")
-	for error, num := range r.errors {
+	for error, num := range r.Errors {
 		fmt.Printf("  [%d]\t%s\n", num, error)
 	}
 }

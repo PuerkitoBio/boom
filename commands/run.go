@@ -24,13 +24,14 @@ import (
 	"time"
 )
 
-func (b *Boom) Run() {
+func (b *Boom) Run() *Report {
 	b.results = make(chan *result, b.N)
-	if b.Output == "" {
+	if b.Output == "" && !b.Quiet {
 		b.bar = newPb(b.N)
 	}
 	b.rpt = newReport(b.N, b.results, b.Output)
 	b.run()
+	return b.rpt
 }
 
 func (b *Boom) worker(ch chan *http.Request) {
